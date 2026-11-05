@@ -1,4 +1,3 @@
-
 import User from "../models/users.js";
 import { Webhook } from "svix";
 
@@ -31,9 +30,7 @@ const clerkWebhooks = async (req, res) => {
     const userData = {
       _id: data.id,
       email: data.email_addresses?.[0]?.email_address,
-      username: [data.first_name, data.last_name]
-        .filter(Boolean)
-        .join(" "),
+      username: [data.first_name, data.last_name].filter(Boolean).join(" "),
       image: data.image_url,
     };
 
