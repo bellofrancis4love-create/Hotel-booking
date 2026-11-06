@@ -2,7 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import connectDB from './configs/db.js';
-import { clerkMiddleware } from '@clerk/express'
+import { clerkMiddleware } from '@clerk/express';
 import clerkWebhooks from './controllers/clerkWebhooks.js';
 
 dotenv.config();
@@ -10,9 +10,13 @@ dotenv.config();
 const app = express();
 
 app.use(cors());
+
+// 1. Webhook FIRST, with the raw body (before express.json and clerkMiddleware)
+app.post("/api/clerk", express.raw({ type: "application/json" }), clerkWebhooks);
+
+// 2. Everything else after
 app.use(express.json());
-app.use(clerkMiddleware())
-app.use("/api/clerk/", clerkWebhooks);
+app.use(clerkMiddleware());
 
 app.get('/', (req, res) => {
   res.send('API is working');
