@@ -4,7 +4,7 @@ import { assets } from '../assets/assets'
 
 const HotelCard = ({ room, index }) => {
     return (
-        <Link to={'/rooms/' + room._id} onClick={() => window.scrollTo(0, 0)} className="relative block w-full relative max-w-70 w-full rounded-xl overflow-hidden bg-white text-grey-500/90 shadow-[0px_4px_4px_rgba(0,0,0,0.05)]">
+        <Link to={'/rooms/' + room._id} onClick={() => window.scrollTo(0, 0)} className="relative block w-full max-w-70 w-full rounded-xl overflow-hidden bg-white text-grey-500/90 shadow-[0px_4px_4px_rgba(0,0,0,0.05)]">
 
             {/* Hotel Image */}
             <img src={room.images[0]} alt={room.hotel.name} className="relative max-w-70 w-full rounded-xl overflow-hidden bg-white text-grey-500/90 shadow-[0px_4px_4px_rgba(0,0,0,0.05)]" />

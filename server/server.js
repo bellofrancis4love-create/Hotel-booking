@@ -11,10 +11,10 @@ const app = express();
 
 app.use(cors());
 
-// 1. Webhook FIRST, with the raw body (before express.json and clerkMiddleware)
-app.post("/api/clerk", express.raw({ type: "application/json" }), clerkWebhooks);
+// Webhook FIRST, raw body
+app.post("/api/clerk", express.raw({ type: "*/*" }), clerkWebhooks);
 
-// 2. Everything else after
+// Everything else after
 app.use(express.json());
 app.use(clerkMiddleware());
 
