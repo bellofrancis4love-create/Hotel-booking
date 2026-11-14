@@ -1,94 +1,83 @@
-
-import User from "../models/users.js";
 import { Webhook } from "svix";
+import User from "../models/users.js";
 
 const clerkWebhooks = async (req, res) => {
+  const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
+
+  if (!webhookSecret) {
+    console.error("CLERK_WEBHOOK_SECRET is not set");
+    return res.status(500).json({ success: false, message: "Server misconfigured" });
+  }
+
+  // The body must be the raw Buffer (express.raw on this route)
+  if (!Buffer.isBuffer(req.body)) {
+    console.error("Webhook body is not a Buffer. Register express.raw() on this route BEFORE express.json().");
+    return res.status(500).json({ success: false, message: "Server misconfigured" });
+  }
+
+  const svixHeaders = {
+    "svix-id": req.headers["svix-id"],
+    "svix-timestamp": req.headers["svix-timestamp"],
+    "svix-signature": req.headers["svix-signature"],
+  };
+
+  if (!svixHeaders["svix-id"] || !svixHeaders["svix-timestamp"] || !svixHeaders["svix-signature"]) {
+    return res.status(400).json({ success: false, message: "Missing Svix headers" });
+  }
+
+  // 1) Verify signature (400 = bad request, Clerk should not treat as a server fault)
+  let evt;
   try {
-    const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
+    const wh = new Webhook(webhookSecret);
+    evt = wh.verify(req.body.toString("utf8"), svixHeaders);
+  } catch (err) {
+    console.error("Clerk webhook signature verification failed:", err.message);
+    return res.status(400).json({ success: false, message: "Invalid signature" });
+  }
 
-    if (!webhookSecret) {
-      console.error("Clerk webhook secret is missing");
+  const { type, data } = evt;
+  console.log("Clerk webhook event received:", type);
 
-      return res.status(500).json({
-        success: false,
-        message: "Clerk webhook secret is missing",
-      });
-    }
-
-    // Create Svix webhook instance
-    const whook = new Webhook(webhookSecret);
-
-    // Get Svix headers
-    const headers = {
-      "svix-id": req.headers["svix-id"],
-      "svix-timestamp": req.headers["svix-timestamp"],
-      "svix-signature": req.headers["svix-signature"],
-    };
-
-    // Ensure the original raw body is available
-    if (!Buffer.isBuffer(req.body)) {
-      throw new Error(
-        "Webhook body is not a Buffer. Check express.raw middleware."
-      );
-    }
-
-    const payload = req.body.toString("utf8");
-
-    // Verify signature AND receive the verified event
-    const evt = whook.verify(payload, headers);
-
-    // Extract event information
-    const { data, type } = evt;
-
-    console.log("Clerk webhook event received:", type);
-
-    // Prepare user information
-    const userData = {
-      _id: data.id,
-      email: data.email_addresses?.[0]?.email_address,
-      username: [data.first_name, data.last_name]
-        .filter(Boolean)
-        .join(" "),
-      image: data.image_url,
-    };
-
-    // Handle different Clerk events
+  // 2) Process the event (500 = our fault, so Clerk retries)
+  try {
     switch (type) {
       case "user.created":
-        await User.findByIdAndUpdate(data.id, userData, {
-          upsert: true,
-          new: true,
-          setDefaultsOnInsert: true,
-        });
-        break;
+      case "user.updated": {
+        const email = data.email_addresses?.[0]?.email_address;
 
-      case "user.updated":
-        await User.findByIdAndUpdate(data.id, userData, {
-          new: true,
-          runValidators: true,
-        });
+        const username =
+          [data.first_name, data.last_name].filter(Boolean).join(" ") ||
+          data.username ||
+          (email ? email.split("@")[0] : "User");
+
+        const userData = {
+          email,
+          username,
+          image: data.image_url,
+        };
+
+        // upsert handles both events and out-of-order delivery
+        await User.findByIdAndUpdate(
+          data.id,
+          { $set: userData, $setOnInsert: { _id: data.id } },
+          { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
+        );
         break;
+      }
 
       case "user.deleted":
-        await User.findByIdAndDelete(data.id);
+        // data.id can be undefined on some delete events
+        if (data.id) await User.findByIdAndDelete(data.id);
         break;
 
       default:
         console.log("Unhandled Clerk event:", type);
     }
 
-    return res.status(200).json({
-      success: true,
-      message: "Webhook received successfully",
-    });
-
-  } catch (error) {
-    console.error("Clerk webhook error:", error);
-
-    return res.status(400).json({
-      success: false,
-      message: "Webhook verification or processing failed",
-    });
+    return res.status(200).json({ success: true, message: "Webhook processed" });
+  } catch (err) {
+    console.error("Clerk webhook processing error:", err);
+    return res.status(500).json({ success: false, message: "Webhook processing failed" });
   }
 };
 
