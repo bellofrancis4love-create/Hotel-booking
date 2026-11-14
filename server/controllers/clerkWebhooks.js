@@ -65,7 +65,7 @@ const clerkWebhooks = async (req, res) => {
         await User.findByIdAndUpdate(
           data.id,
           { $set: userData, $setOnInsert: { _id: data.id } },
-          { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
+          { upsert: true, returnDocument: "after", setDefaultsOnInsert: true, runValidators: true }
         );
         break;
       }
