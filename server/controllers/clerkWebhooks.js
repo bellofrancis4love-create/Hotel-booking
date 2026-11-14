@@ -28,8 +28,13 @@ const clerkWebhooks = async (req, res) => {
   // 1) Verify signature (400 = bad request, Clerk should not treat as a server fault)
   let evt;
   try {
+    const payload = req.body.toString("utf8");
     const wh = new Webhook(webhookSecret);
-    evt = wh.verify(req.body.toString("utf8"), svixHeaders);
+
+    // verify() throws if the signature is invalid. Some svix versions don't
+    // return the event, so we parse the verified payload ourselves.
+    wh.verify(payload, svixHeaders);
+    evt = JSON.parse(payload);
   } catch (err) {
     console.error("Clerk webhook signature verification failed:", err.message);
     return res.status(400).json({ success: false, message: "Invalid signature" });
